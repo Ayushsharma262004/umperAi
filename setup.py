@@ -1,0 +1,50 @@
+"""Setup script for UmpirAI package."""
+
+from setuptools import setup, find_packages
+from pathlib import Path
+
+# Read the README file
+readme_file = Path(__file__).parent / "README.md"
+long_description = ""
+if readme_file.exists():
+    long_description = readme_file.read_text(encoding="utf-8")
+
+setup(
+    name="umpirai",
+    version="0.1.0",
+    author="UmpirAI Team",
+    description="AI-Powered Cricket Umpiring System",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/umpirai/umpirai",
+    packages=find_packages(),
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Topic :: Multimedia :: Video",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+    ],
+    python_requires=">=3.10",
+    install_requires=[
+        "opencv-python>=4.8.0",
+        "torch>=2.0.0",
+        "ultralytics>=8.0.0",
+        "numpy>=1.24.0",
+        "scipy>=1.10.0",
+        "pyyaml>=6.0.0",
+    ],
+    extras_require={
+        "dev": [
+            "hypothesis>=6.0.0",
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
+            "black>=23.0.0",
+            "flake8>=6.0.0",
+            "mypy>=1.0.0",
+        ],
+    },
+)
