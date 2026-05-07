@@ -1,6 +1,6 @@
 # UmpirAI - AI-Powered Cricket Umpiring System
 
-An automated cricket umpiring system that uses computer vision and machine learning to detect and classify match events in real-time.
+UmpirAI is an AI-based cricket umpiring system that uses computer vision to detect no balls, wide balls, outs, and other events in real time. It reduces human error and automates decision-making using video analysis and machine learning models.
 
 ## Features
 
@@ -23,8 +23,8 @@ An automated cricket umpiring system that uses computer vision and machine learn
 
 ```bash
 # Clone the repository
-git clone https://github.com/umpirai/umpirai.git
-cd umpirai
+git clone https://github.com/Ayushsharma262004/umperAi.git
+cd umperAi
 
 # Install dependencies
 pip install -r requirements.txt
@@ -121,6 +121,24 @@ pytest --cov=umpirai --cov-report=html
 # Run property-based tests
 pytest -m property
 ```
+
+## Current Implementation Status
+
+✅ **Completed (Tasks 1-9)**:
+- Core data models with validation
+- Calibration Manager for pitch setup
+- Video Processor with multi-camera support
+- Multi-Camera Synchronizer
+- Object Detector (YOLOv8 integration)
+- Ball Tracker (Extended Kalman Filter)
+- Wide Ball Detector
+- No Ball Detector
+- 295 passing tests (unit + property-based)
+
+🚧 **In Progress**:
+- Dismissal Detectors (Bowled, LBW, Caught)
+- Decision Engine integration
+- Main system integration
 
 ## Documentation
 
