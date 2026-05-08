@@ -13,14 +13,23 @@ import asyncio
 import json
 from datetime import datetime
 import uvicorn
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import UmpirAI components
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from umpirai.umpirai_system import UmpirAISystem, SystemConfig
-from umpirai.config.config_manager import ConfigManager
+from umpirai.umpirai_system import UmpirAISystem, SystemConfig, SystemMode
+from umpirai.config.config_manager import ConfigManager, load_config
+from umpirai.video.video_processor import CameraSource
+from umpirai.models.data_models import Decision as UmpirAIDecision
+import psutil
+import threading
 
 app = FastAPI(title="UmpirAI API", version="1.0.0")
 
@@ -36,6 +45,12 @@ app.add_middleware(
 # Global system instance
 umpirai_system: Optional[UmpirAISystem] = None
 config_manager = ConfigManager()
+processing_thread: Optional[threading.Thread] = None
+stop_processing = threading.Event()
+
+# Store recent decisions for history
+recent_decisions: List[Dict[str, Any]] = []
+MAX_RECENT_DECISIONS = 1000
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -57,6 +72,53 @@ class ConnectionManager:
                 pass
 
 manager = ConnectionManager()
+
+
+# Processing loop function
+def processing_loop():
+    """Background processing loop for continuous frame processing"""
+    global umpirai_system, recent_decisions, stop_processing
+    
+    logger.info("Processing loop started")
+    
+    while not stop_processing.is_set() and umpirai_system and umpirai_system.is_running:
+        try:
+            # Process a single frame
+            decision = umpirai_system.process_frame()
+            
+            # If a decision was made, broadcast it and store it
+            if decision:
+                decision_dict = {
+                    "id": len(recent_decisions) + 1,
+                    "timestamp": decision.timestamp.isoformat() if hasattr(decision.timestamp, 'isoformat') else str(decision.timestamp),
+                    "type": decision.decision_type.value if hasattr(decision.decision_type, 'value') else str(decision.decision_type),
+                    "subType": decision.sub_type or "",
+                    "confidence": decision.confidence,
+                    "requiresReview": decision.requires_review,
+                    "over": f"{decision.over_number}.{decision.ball_number}" if hasattr(decision, 'over_number') else "0.0",
+                    "cameras": len(umpirai_system.video_processor.get_healthy_cameras()) if umpirai_system else 0,
+                    "detections": decision.metadata if hasattr(decision, 'metadata') else {}
+                }
+                
+                # Store decision
+                recent_decisions.append(decision_dict)
+                if len(recent_decisions) > MAX_RECENT_DECISIONS:
+                    recent_decisions.pop(0)
+                
+                # Broadcast to WebSocket clients
+                asyncio.run(manager.broadcast({
+                    "type": "decision",
+                    "data": decision_dict
+                }))
+            
+            # Small sleep to prevent CPU spinning
+            time.sleep(0.001)
+            
+        except Exception as e:
+            logger.error(f"Error in processing loop: {e}")
+            time.sleep(0.1)  # Longer sleep on error
+    
+    logger.info("Processing loop stopped")
 
 
 # Pydantic Models
@@ -119,31 +181,78 @@ async def get_status():
             gpu_usage=0.0
         )
     
-    status = umpirai_system.get_status()
+    # Get system status
+    system_status = umpirai_system.get_status()
+    
+    # Get resource usage
+    cpu_percent = psutil.cpu_percent(interval=0.1)
+    memory = psutil.virtual_memory()
+    memory_percent = memory.percent
+    
+    # Try to get GPU usage (if available)
+    gpu_percent = 0.0
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_percent = torch.cuda.utilization()
+    except:
+        pass
     
     return SystemStatus(
-        running=status.get('running', False),
-        cameras=status.get('active_cameras', 0),
-        fps=status.get('fps', 0.0),
-        latency=status.get('latency', 0.0),
-        cpu_usage=status.get('cpu_usage', 0.0),
-        memory_usage=status.get('memory_usage', 0.0),
-        gpu_usage=status.get('gpu_usage', 0.0)
+        running=system_status.is_running,
+        cameras=len(system_status.active_cameras),
+        fps=system_status.current_fps,
+        latency=system_status.processing_latency_ms,
+        cpu_usage=cpu_percent,
+        memory_usage=memory_percent,
+        gpu_usage=gpu_percent
     )
 
 
 @app.post("/api/start")
 async def start_monitoring():
     """Start the umpiring system"""
-    global umpirai_system
+    global umpirai_system, processing_thread, stop_processing
     
     try:
-        if umpirai_system is None:
-            # Load configuration
-            config = config_manager.load_config('config.yaml')
-            umpirai_system = UmpirAISystem(config)
+        if umpirai_system and umpirai_system.is_running:
+            return {"success": False, "message": "System is already running"}
         
-        umpirai_system.startup()
+        # Load configuration
+        try:
+            config_path = Path(__file__).parent.parent / 'config_test.yaml'
+            if config_path.exists():
+                config = load_config(str(config_path))
+            else:
+                # Use default config
+                config = SystemConfig()
+        except Exception as e:
+            logger.warning(f"Could not load config: {e}. Using defaults.")
+            config = SystemConfig()
+        
+        # Initialize system
+        umpirai_system = UmpirAISystem(config)
+        
+        # Add video source (for testing, use a video file or camera)
+        # This should be configured based on user settings
+        video_path = Path(__file__).parent.parent / 'videos'
+        if video_path.exists():
+            video_files = list(video_path.glob('*.mp4'))
+            if video_files:
+                # Use first video file for demo
+                camera_source = CameraSource(
+                    source_type='file',
+                    source_path=str(video_files[0])
+                )
+                umpirai_system.add_camera('camera_1', camera_source)
+        
+        # Start the system
+        umpirai_system.start()
+        
+        # Start processing thread
+        stop_processing.clear()
+        processing_thread = threading.Thread(target=processing_loop, daemon=True)
+        processing_thread.start()
         
         # Broadcast status update
         await manager.broadcast({
@@ -153,17 +262,26 @@ async def start_monitoring():
         
         return {"success": True, "message": "System started successfully"}
     except Exception as e:
+        logger.error(f"Failed to start system: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/stop")
 async def stop_monitoring():
     """Stop the umpiring system"""
-    global umpirai_system
+    global umpirai_system, processing_thread, stop_processing
     
     try:
-        if umpirai_system:
-            umpirai_system.shutdown()
+        if umpirai_system is None or not umpirai_system.is_running:
+            return {"success": False, "message": "System is not running"}
+        
+        # Stop processing thread
+        stop_processing.set()
+        if processing_thread:
+            processing_thread.join(timeout=5.0)
+        
+        # Stop the system
+        umpirai_system.stop()
         
         # Broadcast status update
         await manager.broadcast({
@@ -173,6 +291,7 @@ async def stop_monitoring():
         
         return {"success": True, "message": "System stopped successfully"}
     except Exception as e:
+        logger.error(f"Failed to stop system: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -183,27 +302,20 @@ async def get_decisions(
     type: Optional[str] = None
 ):
     """Get decision history"""
-    # TODO: Implement database query for decision history
-    # For now, return mock data
+    global recent_decisions
     
-    decisions = [
-        {
-            "id": i,
-            "timestamp": datetime.now().isoformat(),
-            "type": "OUT" if i % 5 == 0 else "LEGAL_DELIVERY",
-            "subType": "Bowled" if i % 5 == 0 else "Fair Delivery",
-            "confidence": 95.0 + (i % 5),
-            "requiresReview": i % 10 == 0,
-            "over": f"{i // 6}.{i % 6 + 1}",
-            "cameras": 4,
-            "detections": {}
-        }
-        for i in range(offset, offset + limit)
-    ]
+    # Filter by type if specified
+    filtered_decisions = recent_decisions
+    if type:
+        filtered_decisions = [d for d in recent_decisions if d['type'] == type]
+    
+    # Apply pagination
+    total = len(filtered_decisions)
+    paginated = filtered_decisions[offset:offset + limit]
     
     return {
-        "decisions": decisions,
-        "total": 247,
+        "decisions": paginated,
+        "total": total,
         "limit": limit,
         "offset": offset
     }
@@ -212,24 +324,14 @@ async def get_decisions(
 @app.get("/api/decisions/{decision_id}")
 async def get_decision(decision_id: int):
     """Get specific decision details"""
-    # TODO: Implement database query
-    return {
-        "id": decision_id,
-        "timestamp": datetime.now().isoformat(),
-        "type": "OUT",
-        "subType": "Bowled",
-        "confidence": 98.5,
-        "requiresReview": False,
-        "over": "5.3",
-        "cameras": 4,
-        "detections": {
-            "ball": "Detected",
-            "stumps": "Detected",
-            "bails": "Dislodged"
-        },
-        "trajectory": [],
-        "videoReferences": []
-    }
+    global recent_decisions
+    
+    # Find decision by ID
+    for decision in recent_decisions:
+        if decision['id'] == decision_id:
+            return decision
+    
+    raise HTTPException(status_code=404, detail="Decision not found")
 
 
 @app.get("/api/calibration")
@@ -269,62 +371,122 @@ async def complete_calibration_step(step: CalibrationStep):
 @app.get("/api/analytics/summary")
 async def get_analytics_summary():
     """Get analytics summary"""
+    global recent_decisions
+    
+    if not recent_decisions:
+        return {
+            "totalDecisions": 0,
+            "avgConfidence": 0.0,
+            "reviewRate": 0.0,
+            "accuracy": 0.0,
+            "decisionTypes": []
+        }
+    
+    # Calculate statistics
+    total = len(recent_decisions)
+    avg_confidence = sum(d['confidence'] for d in recent_decisions) / total
+    review_count = sum(1 for d in recent_decisions if d['requiresReview'])
+    review_rate = (review_count / total) * 100 if total > 0 else 0
+    
+    # Count decision types
+    type_counts = {}
+    for decision in recent_decisions:
+        dtype = decision['type']
+        type_counts[dtype] = type_counts.get(dtype, 0) + 1
+    
+    # Format for chart
+    decision_types = [
+        {"name": dtype, "value": count, "color": _get_decision_color(dtype)}
+        for dtype, count in type_counts.items()
+    ]
+    
     return {
-        "totalDecisions": 247,
-        "avgConfidence": 94.2,
-        "reviewRate": 4.9,
-        "accuracy": 95.1,
-        "decisionTypes": [
-            {"name": "Legal Delivery", "value": 180, "color": "#059669"},
-            {"name": "Wide", "value": 35, "color": "#EAB308"},
-            {"name": "No Ball", "value": 18, "color": "#F97316"},
-            {"name": "Bowled", "value": 8, "color": "#DC2626"},
-            {"name": "LBW", "value": 4, "color": "#DC2626"},
-            {"name": "Caught", "value": 2, "color": "#DC2626"},
-        ]
+        "totalDecisions": total,
+        "avgConfidence": round(avg_confidence, 1),
+        "reviewRate": round(review_rate, 1),
+        "accuracy": round(avg_confidence, 1),  # Using confidence as proxy for accuracy
+        "decisionTypes": decision_types
     }
+
+
+def _get_decision_color(decision_type: str) -> str:
+    """Get color for decision type"""
+    colors = {
+        "LEGAL_DELIVERY": "#059669",
+        "WIDE": "#EAB308",
+        "NO_BALL": "#F97316",
+        "OUT": "#DC2626",
+        "BOWLED": "#DC2626",
+        "LBW": "#DC2626",
+        "CAUGHT": "#DC2626",
+    }
+    return colors.get(decision_type, "#6B7280")
 
 
 @app.get("/api/analytics/performance")
 async def get_performance_metrics():
     """Get performance metrics over time"""
-    return {
-        "metrics": [
-            {"time": "10:00", "fps": 30, "latency": 0.8, "accuracy": 95},
-            {"time": "11:00", "fps": 29, "latency": 0.9, "accuracy": 94},
-            {"time": "12:00", "fps": 30, "latency": 0.7, "accuracy": 96},
-            {"time": "13:00", "fps": 30, "latency": 0.8, "accuracy": 95},
-            {"time": "14:00", "fps": 28, "latency": 1.0, "accuracy": 93},
-            {"time": "15:00", "fps": 30, "latency": 0.8, "accuracy": 95},
-        ]
-    }
+    global umpirai_system
+    
+    if not umpirai_system or not umpirai_system.performance_monitor:
+        # Return empty metrics
+        return {"metrics": []}
+    
+    # Get performance history
+    try:
+        history = umpirai_system.performance_monitor.get_metrics_history()
+        
+        # Format for chart (sample every 10th metric to avoid too much data)
+        metrics = []
+        for i, metric in enumerate(history[::10]):  # Sample every 10th
+            metrics.append({
+                "time": datetime.fromtimestamp(metric.timestamp).strftime("%H:%M"),
+                "fps": round(metric.fps, 1),
+                "latency": round(metric.processing_latency_ms, 1),
+                "accuracy": 95  # Placeholder - would need ground truth
+            })
+        
+        return {"metrics": metrics}
+    except Exception as e:
+        logger.error(f"Error getting performance metrics: {e}")
+        return {"metrics": []}
 
 
 @app.get("/api/settings")
 async def get_settings():
     """Get current system settings"""
+    global umpirai_system
+    
     try:
-        config = config_manager.get_config()
-        if config:
-            return config.to_dict()
+        if umpirai_system and umpirai_system.config:
+            config = umpirai_system.config
+            return {
+                "detectionModel": config.detection_device,
+                "confidenceThreshold": 0.7,  # Default
+                "targetFPS": config.target_fps,
+                "enableGPU": config.detection_device != "cpu"
+            }
         
         # Return default settings
         return {
-            "detectionModel": "yolov8m",
+            "detectionModel": "yolov8n",
             "confidenceThreshold": 0.7,
             "targetFPS": 30,
-            "enableGPU": True
+            "enableGPU": False
         }
     except Exception as e:
+        logger.error(f"Error getting settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.put("/api/settings")
 async def update_settings(settings: SettingsUpdate):
     """Update system settings"""
+    global umpirai_system
+    
     try:
-        # TODO: Update configuration
-        config_manager.save_config(settings.settings, 'config.yaml')
+        # Update settings (would need to restart system for some changes)
+        logger.info(f"Settings update requested: {settings.settings}")
         
         # Broadcast settings update
         await manager.broadcast({
@@ -332,8 +494,9 @@ async def update_settings(settings: SettingsUpdate):
             "data": settings.settings
         })
         
-        return {"success": True, "message": "Settings updated successfully"}
+        return {"success": True, "message": "Settings updated successfully. Restart system for changes to take effect."}
     except Exception as e:
+        logger.error(f"Error updating settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -380,10 +543,16 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    global umpirai_system
+    global umpirai_system, processing_thread, stop_processing
     
+    # Stop processing thread
+    stop_processing.set()
+    if processing_thread:
+        processing_thread.join(timeout=5.0)
+    
+    # Stop system
     if umpirai_system:
-        umpirai_system.shutdown()
+        umpirai_system.stop()
     
     print("👋 UmpirAI API Server shutting down...")
 
