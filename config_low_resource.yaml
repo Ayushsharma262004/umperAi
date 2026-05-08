@@ -1,0 +1,60 @@
+# UmpirAI Low Resource Configuration
+# For resource-constrained systems (2-4 core CPU, 4-8GB RAM, no GPU)
+# Expected Performance: 20-25 FPS, <2s latency
+
+video:
+  camera_sources: []
+  target_fps: 25
+  target_resolution: [640, 360]
+  buffer_size_seconds: 1.0
+  enable_multi_camera: false
+  exposure_adjustment_threshold: 0.3
+  enable_gamma_correction: false
+  enable_normalization: false
+
+detection:
+  model_path: "yolov8n.pt"
+  confidence_threshold_high: 0.90
+  confidence_threshold_medium: 0.80
+  confidence_threshold_low: 0.80
+  max_cameras: 2
+  enable_multi_view_fusion: false
+  nms_threshold: 0.50
+
+tracking:
+  max_trajectory_length: 15
+  occlusion_threshold_frames: 10
+  long_occlusion_threshold_frames: 20
+  process_noise: 0.15
+  measurement_noise: 0.6
+  use_multi_camera_triangulation: false
+
+decision:
+  confidence_threshold: 0.75
+  wide_guideline_distance: 1.0
+  wide_guideline_adaptation_threshold: 0.5
+  enable_wide_detection: true
+  enable_no_ball_detection: true
+  enable_dismissal_detection: true
+
+output:
+  enable_text_output: true
+  enable_audio_output: false
+  enable_visual_output: false
+  max_latency_ms: 2000
+
+logging:
+  log_level: "WARNING"
+  log_retention_days: 7
+  log_format: "text"
+  enable_performance_logging: false
+
+performance:
+  fps_threshold: 15
+  latency_threshold_ms: 3000
+  memory_threshold_percent: 85
+  enable_profiling: false
+
+calibration:
+  auto_calibration: false
+  calibration_file: "calibration.json"

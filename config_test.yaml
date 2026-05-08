@@ -1,0 +1,31 @@
+# UmpirAI Test Configuration
+# Optimized for YOLOv8 processing
+
+video:
+  fps: 25
+  resolution: [1280, 720]
+  buffer_size: 30
+
+detection:
+  model: yolov8n  # Options: yolov8n, yolov8s, yolov8m, yolov8l, yolov8x
+  confidence_threshold: 0.5
+  nms_threshold: 0.5
+  max_cameras: 4
+
+tracking:
+  max_occlusion_frames: 10
+  process_noise: 0.1
+  measurement_noise: 0.5
+
+decision:
+  confidence_threshold: 0.7
+  wide_guideline_distance: 0.5
+  enable_lbw: true
+  enable_bowled: true
+  enable_caught: true
+
+performance:
+  target_fps: 25
+  fps_threshold: 20
+  memory_threshold: 8.0
+  enable_gpu: true

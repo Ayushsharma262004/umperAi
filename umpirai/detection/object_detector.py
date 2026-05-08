@@ -6,6 +6,7 @@ cricket elements (ball, stumps, players, crease lines, etc.) in video frames.
 """
 
 import time
+import logging
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 import numpy as np
@@ -25,6 +26,9 @@ from umpirai.models.data_models import (
     Position3D,
     DetectionClass,
 )
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,6 +53,15 @@ class MultiViewDetectionResult:
             raise TypeError("all camera_ids must be strings")
         if not isinstance(self.fusion_method, str):
             raise TypeError("fusion_method must be a string")
+
+
+@dataclass
+class DetectionError:
+    """Information about a detection error."""
+    error_type: str  # "initialization_failure", "gpu_failure", "low_confidence", "missing_critical_elements"
+    timestamp: float
+    message: str
+    diagnostic_info: Dict[str, any]
 
 
 class ObjectDetector:
@@ -90,7 +103,7 @@ class ObjectDetector:
     # Confidence thresholds
     CONFIDENCE_HIGH = 0.90
     CONFIDENCE_MEDIUM = 0.70
-    CONFIDENCE_LOW = 0.70  # Below this is uncertain
+    CONFIDENCE_LOW = 0.5  # Lowered for COCO dataset compatibility
     
     def __init__(self, model_path: Optional[str] = None, device: str = "cpu"):
         """
@@ -105,6 +118,16 @@ class ObjectDetector:
             RuntimeError: If model fails to load
         """
         if not YOLO_AVAILABLE:
+            error = DetectionError(
+                error_type="initialization_failure",
+                timestamp=time.time(),
+                message="YOLOv8 (ultralytics) is not installed",
+                diagnostic_info={
+                    "required_package": "ultralytics",
+                    "install_command": "pip install ultralytics"
+                }
+            )
+            self._log_error(error)
             raise RuntimeError(
                 "YOLOv8 (ultralytics) is not installed. "
                 "Install with: pip install ultralytics"
@@ -112,20 +135,78 @@ class ObjectDetector:
         
         self.device = device
         self.model_path = model_path or "yolov8m.pt"  # Default to YOLOv8m
+        self.model = None
+        self._model_version = "unknown"
         
+        # Error tracking
+        self.last_error: Optional[DetectionError] = None
+        self.missing_elements_start_time: Dict[str, float] = {}  # Track when elements go missing
+        self.gpu_failed = False
+        
+        # Camera calibration data for 3D triangulation
+        self.camera_calibrations: Dict[str, Dict] = {}
+        
+        # Try to load model
+        try:
+            self._initialize_model(device)
+        except Exception as e:
+            error = DetectionError(
+                error_type="initialization_failure",
+                timestamp=time.time(),
+                message=f"Failed to load YOLOv8 model from {self.model_path}: {e}",
+                diagnostic_info={
+                    "model_path": self.model_path,
+                    "device": device,
+                    "exception_type": type(e).__name__,
+                    "exception_message": str(e)
+                }
+            )
+            self._log_error(error)
+            raise RuntimeError(error.message)
+    
+    def _initialize_model(self, device: str) -> None:
+        """
+        Initialize the YOLO model.
+        
+        Args:
+            device: Device for inference
+            
+        Raises:
+            Exception: If model initialization fails
+        """
         try:
             # Load YOLOv8 model
             self.model = YOLO(self.model_path)
             self.model.to(device)
+            self.device = device
             
             # Store model version
             self._model_version = self._extract_model_version()
             
+            logger.info(f"ObjectDetector initialized successfully on {device}")
+            
         except Exception as e:
-            raise RuntimeError(f"Failed to load YOLOv8 model from {self.model_path}: {e}")
-        
-        # Camera calibration data for 3D triangulation
-        self.camera_calibrations: Dict[str, Dict] = {}
+            # If GPU initialization failed, try CPU fallback
+            if device != "cpu" and not self.gpu_failed:
+                logger.warning(f"GPU initialization failed: {e}. Falling back to CPU.")
+                self.gpu_failed = True
+                
+                error = DetectionError(
+                    error_type="gpu_failure",
+                    timestamp=time.time(),
+                    message=f"GPU initialization failed, falling back to CPU: {e}",
+                    diagnostic_info={
+                        "original_device": device,
+                        "fallback_device": "cpu",
+                        "exception_type": type(e).__name__
+                    }
+                )
+                self._log_error(error)
+                
+                # Try CPU
+                self._initialize_model("cpu")
+            else:
+                raise
     
     def detect(self, frame: Frame) -> DetectionResult:
         """
@@ -139,66 +220,101 @@ class ObjectDetector:
         """
         start_time = time.time()
         
-        # Run YOLOv8 inference
-        results = self.model(frame.image, verbose=False)
-        
-        # Extract detections
-        detections = []
-        for result in results:
-            boxes = result.boxes
+        try:
+            # Run YOLOv8 inference with lower confidence threshold
+            results = self.model(frame.image, verbose=False, conf=0.25)  # Lower threshold to detect more objects
             
-            for i in range(len(boxes)):
-                # Extract box data
-                box_data = boxes.xyxy[i]
-                # Handle both tensor and numpy array
-                if hasattr(box_data, 'cpu'):
-                    box = box_data.cpu().numpy()  # [x1, y1, x2, y2]
-                else:
-                    box = np.array(box_data)
+            # Extract detections
+            detections = []
+            for result in results:
+                boxes = result.boxes
                 
-                conf_data = boxes.conf[i]
-                if hasattr(conf_data, 'cpu'):
-                    confidence = float(conf_data.cpu().numpy())
-                else:
-                    confidence = float(conf_data)
-                
-                cls_data = boxes.cls[i]
-                if hasattr(cls_data, 'cpu'):
-                    class_id = int(cls_data.cpu().numpy())
-                else:
-                    class_id = int(cls_data)
-                
-                # Convert to BoundingBox format (x, y, width, height)
-                x1, y1, x2, y2 = box
-                bounding_box = BoundingBox(
-                    x=float(x1),
-                    y=float(y1),
-                    width=float(x2 - x1),
-                    height=float(y2 - y1)
-                )
-                
-                # Get class name
-                class_name = self.CLASS_NAMES.get(class_id, f"unknown_{class_id}")
-                
-                # Create detection
-                detection = Detection(
-                    class_id=class_id,
-                    class_name=class_name,
-                    bounding_box=bounding_box,
-                    confidence=confidence,
-                    position_3d=None  # Will be set by triangulation if available
-                )
-                
-                detections.append(detection)
-        
-        # Calculate processing time
-        processing_time_ms = (time.time() - start_time) * 1000
-        
-        return DetectionResult(
-            frame=frame,
-            detections=detections,
-            processing_time_ms=processing_time_ms
-        )
+                for i in range(len(boxes)):
+                    # Extract box data
+                    box_data = boxes.xyxy[i]
+                    # Handle both tensor and numpy array
+                    if hasattr(box_data, 'cpu'):
+                        box = box_data.cpu().numpy()  # [x1, y1, x2, y2]
+                    else:
+                        box = np.array(box_data)
+                    
+                    conf_data = boxes.conf[i]
+                    if hasattr(conf_data, 'cpu'):
+                        confidence = float(conf_data.cpu().numpy())
+                    else:
+                        confidence = float(conf_data)
+                    
+                    cls_data = boxes.cls[i]
+                    if hasattr(cls_data, 'cpu'):
+                        class_id = int(cls_data.cpu().numpy())
+                    else:
+                        class_id = int(cls_data)
+                    
+                    # Convert to BoundingBox format (x, y, width, height)
+                    x1, y1, x2, y2 = box
+                    bounding_box = BoundingBox(
+                        x=float(x1),
+                        y=float(y1),
+                        width=float(x2 - x1),
+                        height=float(y2 - y1)
+                    )
+                    
+                    # Get class name - map COCO classes to cricket classes
+                    if class_id == 0:  # person in COCO
+                        class_name = "person"  # Keep as person for now
+                    elif class_id == 32:  # sports ball in COCO
+                        class_name = "ball"  # Map to ball
+                    else:
+                        class_name = self.CLASS_NAMES.get(class_id, f"unknown_{class_id}")
+                    
+                    # Flag low confidence detections
+                    if confidence < self.CONFIDENCE_LOW:
+                        error = DetectionError(
+                            error_type="low_confidence",
+                            timestamp=frame.timestamp,
+                            message=f"Low confidence detection: {class_name} with confidence {confidence:.2f}",
+                            diagnostic_info={
+                                "class_name": class_name,
+                                "confidence": confidence,
+                                "threshold": self.CONFIDENCE_LOW,
+                                "frame_number": frame.frame_number
+                            }
+                        )
+                        self._log_error(error)
+                    
+                    # Create detection
+                    detection = Detection(
+                        class_id=class_id,
+                        class_name=class_name,
+                        bounding_box=bounding_box,
+                        confidence=confidence,
+                        position_3d=None  # Will be set by triangulation if available
+                    )
+                    
+                    detections.append(detection)
+            
+            # Check for missing critical elements
+            self._check_missing_critical_elements(detections, frame.timestamp)
+            
+            # Calculate processing time
+            processing_time_ms = (time.time() - start_time) * 1000
+            
+            return DetectionResult(
+                frame=frame,
+                detections=detections,
+                processing_time_ms=processing_time_ms
+            )
+            
+        except Exception as e:
+            logger.error(f"Detection error: {e}")
+            
+            # Return empty detection result on error
+            processing_time_ms = (time.time() - start_time) * 1000
+            return DetectionResult(
+                frame=frame,
+                detections=[],
+                processing_time_ms=processing_time_ms
+            )
     
     def detect_multi_view(self, frames: Dict[str, Frame]) -> MultiViewDetectionResult:
         """
@@ -515,3 +631,80 @@ class ObjectDetector:
             return "medium"
         else:
             return "low"
+    
+    def _check_missing_critical_elements(self, detections: List[Detection], timestamp: float) -> None:
+        """
+        Check for missing critical elements (stumps, crease lines).
+        
+        Alert if critical elements are missing for more than 5 seconds.
+        
+        Args:
+            detections: List of detections
+            timestamp: Current timestamp
+        """
+        # Critical element classes
+        critical_classes = {"stumps", "crease"}
+        
+        # Check which critical elements are present
+        detected_classes = {det.class_name for det in detections}
+        missing_classes = critical_classes - detected_classes
+        
+        # Track missing elements
+        for class_name in critical_classes:
+            if class_name in missing_classes:
+                # Element is missing
+                if class_name not in self.missing_elements_start_time:
+                    # First time missing - record start time
+                    self.missing_elements_start_time[class_name] = timestamp
+                else:
+                    # Check how long it's been missing
+                    missing_duration = timestamp - self.missing_elements_start_time[class_name]
+                    if missing_duration > 5.0:  # >5 seconds threshold
+                        error = DetectionError(
+                            error_type="missing_critical_elements",
+                            timestamp=timestamp,
+                            message=f"Critical element '{class_name}' missing for {missing_duration:.1f} seconds",
+                            diagnostic_info={
+                                "missing_element": class_name,
+                                "missing_duration": missing_duration,
+                                "threshold": 5.0
+                            }
+                        )
+                        self._log_error(error)
+                        # Reset to avoid repeated alerts
+                        self.missing_elements_start_time[class_name] = timestamp
+            else:
+                # Element is present - clear tracking
+                if class_name in self.missing_elements_start_time:
+                    del self.missing_elements_start_time[class_name]
+    
+    def _log_error(self, error: DetectionError) -> None:
+        """
+        Log a detection error.
+        
+        Args:
+            error: Error information
+        """
+        self.last_error = error
+        logger.error(
+            f"Detection error: {error.error_type} - {error.message}. "
+            f"Diagnostic info: {error.diagnostic_info}"
+        )
+    
+    def get_last_error(self) -> Optional[DetectionError]:
+        """
+        Get the last error that occurred.
+        
+        Returns:
+            Last error, or None if no errors
+        """
+        return self.last_error
+    
+    def is_using_gpu(self) -> bool:
+        """
+        Check if detector is using GPU.
+        
+        Returns:
+            True if using GPU, False if using CPU
+        """
+        return self.device != "cpu" and not self.gpu_failed

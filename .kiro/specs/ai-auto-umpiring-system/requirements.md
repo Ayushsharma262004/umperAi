@@ -36,7 +36,7 @@ UmpirAI is an AI-powered cricket umpiring system that automatically detects and 
 1. THE Video_Processor SHALL accept video input from smartphone cameras
 2. THE Video_Processor SHALL accept video input from external cameras
 3. WHEN video input is received, THE Video_Processor SHALL process frames at a minimum rate of 30 frames per second
-4. THE Video_Processor SHALL maintain video capture during continuous match play for at least 90 minutes
+4. THE Video_Processor SHALL maintain video capture during continuous match play for at least 120 minutes
 5. WHEN lighting conditions change, THE Video_Processor SHALL adjust exposure settings to maintain visibility
 
 ### Requirement 2: Cricket Element Detection

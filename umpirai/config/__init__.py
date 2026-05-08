@@ -1,5 +1,5 @@
-"""Configuration management for the UmpirAI system."""
+"""Configuration management for UmpirAI system."""
 
-from umpirai.config.config_manager import ConfigManager, SystemConfig
+from .config_manager import ConfigManager, SystemConfig, load_config, save_config
 
-__all__ = ["ConfigManager", "SystemConfig"]
+__all__ = ['ConfigManager', 'SystemConfig', 'load_config', 'save_config']

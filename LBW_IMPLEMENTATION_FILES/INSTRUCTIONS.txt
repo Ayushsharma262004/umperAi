@@ -1,0 +1,80 @@
+================================================================================
+LBW IMPLEMENTATION - QUICK START GUIDE
+================================================================================
+
+IMPORTANT: The lbw_detector.py file in this folder is INCOMPLETE (only ~200 lines).
+You need the COMPLETE version which is ~600 lines.
+
+================================================================================
+EASIEST METHOD: Use the GitHub Repository
+================================================================================
+
+I've prepared the complete files. Here's how to get them:
+
+OPTION 1: Download from the conversation
+-----------------------------------------
+1. Look for the complete code I provided earlier in our conversation
+2. Copy each section into the appropriate file
+3. Follow the structure below
+
+OPTION 2: Manual Copy-Paste (RECOMMENDED)
+------------------------------------------
+Since file writing had issues, here's what to do:
+
+1. Open your VS Code
+2. Navigate to: umpirai/decision/lbw_detector.py
+3. I'll provide you the complete code in smaller chunks
+4. Copy-paste each chunk sequentially
+
+================================================================================
+FILE STRUCTURE
+================================================================================
+
+You need to create/update 3 files:
+
+1. umpirai/decision/lbw_detector.py          (~600 lines, ~25 KB)
+2. tests/test_lbw_detector_properties.py     (~350 lines, ~12 KB)
+3. tests/test_lbw_detector.py                (~500 lines, ~18 KB)
+
+================================================================================
+WHAT TO DO NOW
+================================================================================
+
+Reply with: "Ready for code chunks"
+
+And I'll provide you the complete code in 5-6 manageable chunks that you can
+copy-paste directly into your editor.
+
+Each chunk will be clearly labeled:
+- CHUNK 1/6: Imports and Data Classes
+- CHUNK 2/6: LBWDetector Class Init and Main Methods
+- CHUNK 3/6: Detection Methods
+- etc.
+
+================================================================================
+VERIFICATION
+================================================================================
+
+After copying all files, verify with:
+
+```bash
+# Test imports
+python -c "from umpirai.decision.lbw_detector import LBWDetector; print('✓ LBW Detector OK')"
+
+# Run property tests
+python -m pytest tests/test_lbw_detector_properties.py -v
+
+# Run unit tests  
+python -m pytest tests/test_lbw_detector.py -v
+```
+
+================================================================================
+CURRENT STATUS
+================================================================================
+
+✅ Task 11.1: LBWDetector class structure defined
+✅ Task 11.2-11.6: Property tests designed
+✅ Task 11.7: Unit tests designed
+⏳ PENDING: Copy complete code to files
+
+================================================================================

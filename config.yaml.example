@@ -1,0 +1,79 @@
+# UmpirAI System Configuration
+# This is an example configuration file showing all available options with their default values.
+# Copy this file to config.yaml and modify as needed.
+
+# Video Processing Configuration
+video:
+  target_fps: 30                          # Target frames per second for video processing
+  resolution_width: 1280                  # Video resolution width in pixels
+  resolution_height: 720                  # Video resolution height in pixels
+  buffer_size_seconds: 2.0                # Frame buffer size in seconds
+  exposure_adjustment_threshold: 0.3      # Threshold for automatic exposure adjustment (0-1)
+  gamma_correction: true                  # Enable gamma correction for lighting changes
+
+# Object Detection Configuration
+detection:
+  model_path: "yolov8m.pt"                # Path to YOLOv8 model file
+  confidence_threshold_high: 0.9          # High confidence threshold (>=90%)
+  confidence_threshold_medium: 0.7        # Medium confidence threshold (70-90%)
+  confidence_threshold_low: 0.5           # Low confidence threshold (<70%)
+  enable_multi_view_fusion: true          # Enable multi-camera detection fusion
+  max_cameras: 4                          # Maximum number of cameras supported
+
+# Ball Tracking Configuration
+tracking:
+  max_occlusion_frames: 10                # Maximum frames to predict during occlusion
+  trajectory_history_size: 30             # Number of positions to store in trajectory history
+  process_noise: 0.1                      # EKF process noise parameter
+  measurement_noise: 5.0                  # EKF measurement noise (pixels)
+  gravity: 9.81                           # Gravity constant (m/s²)
+  air_resistance_coefficient: 0.47        # Air resistance coefficient for ball
+
+# Decision Engine Configuration
+decision:
+  confidence_review_threshold: 0.8        # Confidence threshold for manual review (<80%)
+  wide_guideline_offset: 1.0              # Wide guideline offset from batsman (meters)
+  batsman_movement_threshold: 0.5         # Threshold for batsman movement detection (meters)
+  fielder_control_frames: 3               # Frames required to confirm fielder control
+  ground_contact_height_threshold: 0.1    # Height threshold for ground contact detection (meters)
+  enable_wide_detector: true              # Enable wide ball detection
+  enable_no_ball_detector: true           # Enable no ball detection
+  enable_bowled_detector: true            # Enable bowled dismissal detection
+  enable_caught_detector: true            # Enable caught dismissal detection
+  enable_lbw_detector: true               # Enable LBW detection
+
+# Output Configuration
+output:
+  enable_text_display: true               # Enable on-screen text display
+  enable_audio_announcement: false        # Enable audio announcements (text-to-speech)
+  enable_visual_indicators: true          # Enable color-coded visual indicators
+  decision_latency_target_ms: 500.0       # Target decision latency (milliseconds)
+  decision_latency_max_ms: 1000.0         # Maximum acceptable decision latency (milliseconds)
+
+# Logging Configuration
+logging:
+  log_directory: "logs"                   # Directory for log files
+  log_level: "INFO"                       # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  retention_days: 30                      # Number of days to retain logs
+  enable_event_logging: true              # Enable match event logging
+  enable_performance_logging: true        # Enable performance metrics logging
+  log_format: "jsonl"                     # Log format: jsonl, json, or text
+
+# Performance Monitoring Configuration
+performance:
+  fps_alert_threshold: 25.0               # Alert if FPS drops below this value
+  latency_alert_threshold_ms: 2000.0      # Alert if processing latency exceeds this (ms)
+  detection_accuracy_alert_threshold: 0.8 # Alert if detection accuracy drops below this
+  memory_alert_threshold_percent: 90.0    # Alert if memory usage exceeds this percentage
+  enable_performance_monitoring: true     # Enable performance monitoring
+  metrics_history_size: 100               # Number of metrics to keep in history
+
+# Calibration Configuration
+calibration:
+  calibration_directory: "calibrations"   # Directory for calibration files
+  auto_load_last_calibration: true        # Automatically load last used calibration
+  require_calibration_validation: true    # Require calibration validation before use
+
+# System-Level Configuration
+max_runtime_minutes: 120                  # Maximum continuous runtime (minutes)
+enable_graceful_degradation: true         # Enable graceful degradation on errors

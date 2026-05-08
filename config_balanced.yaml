@@ -1,0 +1,60 @@
+# UmpirAI Balanced Configuration
+# For mid-range hardware (4-6 core CPU, 8-16GB RAM, optional GPU)
+# Expected Performance: 25-30 FPS, <1.5s latency
+
+video:
+  camera_sources: []
+  target_fps: 30
+  target_resolution: [960, 540]
+  buffer_size_seconds: 1.5
+  enable_multi_camera: false
+  exposure_adjustment_threshold: 0.3
+  enable_gamma_correction: true
+  enable_normalization: false
+
+detection:
+  model_path: "yolov8s.pt"
+  confidence_threshold_high: 0.90
+  confidence_threshold_medium: 0.75
+  confidence_threshold_low: 0.75
+  max_cameras: 3
+  enable_multi_view_fusion: true
+  nms_threshold: 0.45
+
+tracking:
+  max_trajectory_length: 20
+  occlusion_threshold_frames: 10
+  long_occlusion_threshold_frames: 20
+  process_noise: 0.1
+  measurement_noise: 0.5
+  use_multi_camera_triangulation: false
+
+decision:
+  confidence_threshold: 0.80
+  wide_guideline_distance: 1.0
+  wide_guideline_adaptation_threshold: 0.5
+  enable_wide_detection: true
+  enable_no_ball_detection: true
+  enable_dismissal_detection: true
+
+output:
+  enable_text_output: true
+  enable_audio_output: false
+  enable_visual_output: true
+  max_latency_ms: 1500
+
+logging:
+  log_level: "INFO"
+  log_retention_days: 30
+  log_format: "json"
+  enable_performance_logging: true
+
+performance:
+  fps_threshold: 20
+  latency_threshold_ms: 2000
+  memory_threshold_percent: 90
+  enable_profiling: false
+
+calibration:
+  auto_calibration: false
+  calibration_file: "calibration.json"

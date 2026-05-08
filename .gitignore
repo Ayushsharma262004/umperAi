@@ -61,3 +61,15 @@ Thumbs.db
 # Configuration (may contain sensitive data)
 config.local.yaml
 config.local.json
+
+# Node.js / React
+node_modules/
+package-lock.json
+webapp/node_modules/
+webapp/package-lock.json
+webapp/dist/
+webapp/build/
+
+# Output videos
+output_videos/
+output_*.mp4

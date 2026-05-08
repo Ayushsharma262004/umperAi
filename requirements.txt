@@ -10,3 +10,5 @@ scipy>=1.10.0
 # Additional dependencies
 pyyaml>=6.0.0
 dataclasses-json>=0.6.0
+pyttsx3>=2.90
+psutil>=5.9.0

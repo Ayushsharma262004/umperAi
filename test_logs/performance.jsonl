@@ -1,0 +1,8 @@
+{"timestamp": 1778169904.292373, "timestamp_iso": "2026-05-07T21:35:04.292373", "fps": 30.0, "processing_latency_ms": 17.53711700439453, "cpu_usage_percent": 0.0, "memory_usage_mb": 95.58984375, "gpu_usage_percent": null}
+{"timestamp": 1778171320.7067728, "timestamp_iso": "2026-05-07T21:58:40.706773", "fps": 30.0, "processing_latency_ms": 7.633447647094727, "cpu_usage_percent": 0.0, "memory_usage_mb": 362.109375, "gpu_usage_percent": null}
+{"timestamp": 1778228571.89728, "timestamp_iso": "2026-05-08T13:52:51.897280", "fps": 30.0, "processing_latency_ms": 0.0, "cpu_usage_percent": 0.0, "memory_usage_mb": 120.0078125, "gpu_usage_percent": null}
+{"timestamp": 1778229457.6231828, "timestamp_iso": "2026-05-08T14:07:37.623183", "fps": 30.0, "processing_latency_ms": 15.808820724487305, "cpu_usage_percent": 0.0, "memory_usage_mb": 120.546875, "gpu_usage_percent": null}
+{"timestamp": 1778231709.8279274, "timestamp_iso": "2026-05-08T14:45:09.827927", "fps": 30.0, "processing_latency_ms": 3.9758682250976562, "cpu_usage_percent": 0.0, "memory_usage_mb": 126.453125, "gpu_usage_percent": null}
+{"timestamp": 1778231898.7479897, "timestamp_iso": "2026-05-08T14:48:18.747990", "fps": 30.0, "processing_latency_ms": 8.242130279541016, "cpu_usage_percent": 0.0, "memory_usage_mb": 126.80859375, "gpu_usage_percent": null}
+{"timestamp": 1778232088.3751025, "timestamp_iso": "2026-05-08T14:51:28.375103", "fps": 30.0, "processing_latency_ms": 7.606267929077148, "cpu_usage_percent": 0.0, "memory_usage_mb": 123.0390625, "gpu_usage_percent": null}
+{"timestamp": 1778232991.476117, "timestamp_iso": "2026-05-08T15:06:31.476117", "fps": 30.0, "processing_latency_ms": 5.194187164306641, "cpu_usage_percent": 0.0, "memory_usage_mb": 124.234375, "gpu_usage_percent": null}

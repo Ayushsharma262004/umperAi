@@ -1,0 +1,60 @@
+# UmpirAI High Performance Configuration
+# For systems with powerful hardware (8+ core CPU, 16GB+ RAM, NVIDIA RTX GPU)
+# Expected Performance: 30+ FPS, <1s latency
+
+video:
+  camera_sources: []
+  target_fps: 30
+  target_resolution: [1280, 720]
+  buffer_size_seconds: 2.0
+  enable_multi_camera: false
+  exposure_adjustment_threshold: 0.3
+  enable_gamma_correction: true
+  enable_normalization: true
+
+detection:
+  model_path: "yolov8m.pt"
+  confidence_threshold_high: 0.90
+  confidence_threshold_medium: 0.70
+  confidence_threshold_low: 0.70
+  max_cameras: 4
+  enable_multi_view_fusion: true
+  nms_threshold: 0.45
+
+tracking:
+  max_trajectory_length: 30
+  occlusion_threshold_frames: 10
+  long_occlusion_threshold_frames: 20
+  process_noise: 0.1
+  measurement_noise: 0.5
+  use_multi_camera_triangulation: true
+
+decision:
+  confidence_threshold: 0.80
+  wide_guideline_distance: 1.0
+  wide_guideline_adaptation_threshold: 0.5
+  enable_wide_detection: true
+  enable_no_ball_detection: true
+  enable_dismissal_detection: true
+
+output:
+  enable_text_output: true
+  enable_audio_output: false
+  enable_visual_output: true
+  max_latency_ms: 1000
+
+logging:
+  log_level: "INFO"
+  log_retention_days: 30
+  log_format: "json"
+  enable_performance_logging: true
+
+performance:
+  fps_threshold: 25
+  latency_threshold_ms: 2000
+  memory_threshold_percent: 90
+  enable_profiling: false
+
+calibration:
+  auto_calibration: false
+  calibration_file: "calibration.json"
